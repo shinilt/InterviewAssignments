@@ -1,0 +1,16 @@
+1. ibanTransactionQueuePolicy is configured without acccess limitation.
+Technical Info : The policy mentioned is used to control the access to send messages to the ibanTransactionQueue Queue service. The Principal configred for this queue is *. This will enable other users to post the messages to the queue.
+Business Impact : The transaction queue is wide open. Any unauthorized messages posted onto this queue can trigger transactions what are not meant to be executed. It can have serious business and reputation impact if someone has managed to exploit this vulnerability.
+
+2. websiteStaticAssetPolicy is configured without acccess limitation.
+Techinical Info : The policy mentioned is used to control the access to websiteStaticAsset S3 service. The Principal configured for this is *. The will enable the access to this S3 service to others as well.
+Business Impact : The websiteStaticAsset can be used by other users. It can be use or misuse of the hosted resources. This can potentially open a channel for DoS/DDoS attcks to bring the web application down/ slow. This will hinder the user experience and may lead to other cascaded application impact.
+
+3. bankStatementPdfs CorsConfiguration is allowed to have GET,POST,PUT access without restriction.
+Techinical Info : The CorsConfiguration has allowed origins * for GET,POST,PUT.
+Business Impact : There may not be direct impact as the authentication is setup. The Allowed origins can be added on need basis, so that there is no leakage of the data.
+
+4. ssoChangeQueuePolicy - Principal is not set.
+Technical Info: It is a good practice to configure the Principal specifically for the policy, especially for authentication related services.
+
+
