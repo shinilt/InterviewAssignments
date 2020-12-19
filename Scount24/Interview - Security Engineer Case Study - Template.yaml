@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: banking-stack
+
+Resources:
+  ibanTransactionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      RedrivePolicy:
+        deadLetterTargetArn: '|ref|deadLetterQueue'
+        maxReceiveCount: 10
+
+  ibanTransactionQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+         Version: '2012-10-17'
+         Statement:
+          -
+            Effect: 'Allow'
+            Principal: '*'
+            Action: 
+             - 'sqs:SendMessage'
+      Queues:
+         - '|ref|ibanTransactionQueue'
+
+  websiteStaticAsset:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+
+  websiteStaticAssetPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref 'websiteStaticAsset'
+      PolicyDocument:
+        Statement:
+            Effect: Allow
+            Principal: *
+            Action:
+              - s3:GetObject
+            Resource:
+              - !Sub 'arn:aws:s3:::${websiteStaticAsset}/*'
+              - !Sub 'arn:aws:s3:::${websiteStaticAsset}'
+
+  bankStatementPdfs:
+    Type: AWS::S3::Bucket
+    BucketName: bankStatements
+    DeletionPolicy: Retain
+    Properties:
+      AccessControl: AuthenticatedRead
+      CorsConfiguration:
+        CorsRules:
+          -
+            AllowedOrigins:
+              - '*'
+            AllowedMethods:
+              - 'GET'
+              - 'POST'
+              - 'PUT'
+            AllowedHeaders:
+              - '*'
+            MaxAge: 3000
+            ExposedHeaders:
+              - 'x-amz-server-side-encryption'
+              - 'x-amz-request-id'
+              - 'x-amz-id-2'
+
+  iamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: /
+      Policies:
+        - PolicyName: transaction-processor
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - cloudformation:Describe*
+                  - cloudformation:List*
+                  - cloudformation:Get*
+                  - ec2:DescribeTags
+                Resource: '*'
+                Effect: Allow
+        - PolicyName: accessS3
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Action:
+                  - s3:ListAllMyBuckets
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                  - s3:GetObject
+                Resource:
+                  - arn:aws:s3:::*
+                  - arn:aws:s3:::*/*
+                Effect: Allow
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::883697986312:role/messaging-service
+
+  ssoChangeQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: queue-sso-change
+
+  ssoChangeQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref 'ssoChangeQueue'
+      PolicyDocument:
+        Statement:
+          - Action:
+              - sqs:SendMessage
+            Resource: !GetAtt 'ssoChangeQueue.Arn'
+            Effect: Allow
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref 'ssoChangeTopicArn'
+            Principal:
+              Service:
+                - sns.amazonaws.com
+          - Action:
+              - sqs:GetQueueUrl
+              - sqs:DeleteMessage
+              - sqs:ReceiveMessage
+              - sqs:GetQueueAttributes
+            Resource: !GetAtt 'ssoChangeQueue.Arn'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt 'iamRole.Arn'
